@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modular Arithmetic Visualization Tool</title>
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        #controls {
+            margin-bottom: 20px;
+        }
+        label, input, select, button {
+            margin: 5px;
+        }
+        #visualization {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            width: 100%;
+        }
+        .operation-sign, .equivalence-sign {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 0 20px;
+        }
+        .equivalence-sign {
+            position: relative;
+        }
+        .modulo-subscript {
+            position: absolute;
+            right: -20px;
+            bottom: -10px;
+            font-size: 24px;
+        }
+        .dial-container {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        .value-display {
+            font-size: 18px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Modular Arithmetic Visualization Tool</h1>
+    <div id="controls">
+        <label for="modulus">Modulus:</label>
+        <input type="number" id="modulus" value="12" min="2" max="24">
+        
+        <label for="a">A:</label>
+        <input type="number" id="a" value="1" min="0">
+        
+        <label for="b">B:</label>
+        <input type="number" id="b" value="3" min="0">
+        
+        <label for="operation">Operation:</label>
+        <select id="operation">
+            <option value="add">Add</option>
+            <option value="subtract">Subtract</option>
+            <option value="multiply">Multiply</option>
+        </select>
+        
+        <button onclick="updateVisualization()">Visualize</button>
+    </div>
+    <div id="visualization"></div>
+
+    <script>
+        const width = 200;
+        const height = 200;
+        const radius = Math.min(width, height) / 2 - 20;
+
+        function createDial(containerId, color) {
+            const container = d3.select("#visualization")
+                .append("div")
+                .attr("class", "dial-container")
+                .attr("id", containerId);
+
+            const svg = container.append("svg")
+                .attr("width", width)
+                .attr("height", height)
+                .append("g")
+                .attr("transform", `translate(${width / 2}, ${height / 2})`);
+
+            const clockFace = svg.append("circle")
+                .attr("r", radius)
+                .attr("fill", "none")
+                .attr("stroke", "black");
+
+            svg.append("circle")
+                .attr("r", 3)
+                .attr("fill", "black");
+
+            // Create radial gradient
+            const gradient = svg.append("defs")
+                .append("radialGradient")
+                .attr("id", `gradient-${color}`)
+                .attr("gradientUnits", "userSpaceOnUse")
+                .attr("cx", "0")
+                .attr("cy", "0")
+                .attr("r", radius);
+
+            gradient.append("stop")
+                .attr("offset", "0%")
+                .attr("stop-color", color)
+                .attr("stop-opacity", 0.7);
+
+            gradient.append("stop")
+                .attr("offset", "100%")
+                .attr("stop-color", color)
+                .attr("stop-opacity", 0);
+
+            // Add sweep area
+            svg.append("path")
+                .attr("class", "sweep-area")
+                .attr("fill", `url(#gradient-${color})`)
+                .attr("opacity", 1);
+
+            svg.append("defs").append("marker")
+                .attr("id", `arrowhead-${color}`)
+                .attr("viewBox", "-0 -5 10 10")
+                .attr("refX", 8)
+                .attr("refY", 0)
+                .attr("orient", "auto")
+                .attr("markerWidth", 6)
+                .attr("markerHeight", 6)
+                .attr("xoverflow", "visible")
+                .append("svg:path")
+                .attr("d", "M 0,-5 L 10 ,0 L 0,5")
+                .attr("fill", "#999")
+                .style("stroke", "none");
+
+            // Add value display
+            container.append("div")
+                .attr("class", "value-display")
+                .text("0");
+
+            return svg;
+        }
+
+        function updateDial(svg, modulus, value, color, isSubtraction = false) {
+            const container = d3.select(svg.node().parentNode.parentNode);
+            svg.selectAll(".number, .arrow").remove();
+
+            const numbers = d3.range(modulus);
+            const numberRadius = radius - 15;
+
+            svg.selectAll(".number")
+                .data(numbers)
+                .enter()
+                .append("text")
+                .attr("class", "number")
+                .attr("x", d => numberRadius * Math.sin(2 * Math.PI * d / modulus))
+                .attr("y", d => -numberRadius * Math.cos(2 * Math.PI * d / modulus))
+                .attr("text-anchor", "middle")
+                .attr("dominant-baseline", "central")
+                .attr("font-size", "10px")
+                .text(d => d);
+
+            const arrow = svg.append("line")
+                .attr("class", "arrow")
+                .attr("x1", 0)
+                .attr("y1", 0)
+                .attr("x2", 0)
+                .attr("y2", -(radius - 10))
+                .attr("stroke", color)
+                .attr("stroke-width", 2)
+                .attr("marker-end", `url(#arrowhead-${color})`);
+
+            rotateArrowWithSweep(svg, arrow, value, modulus, 2000, color, isSubtraction);
+
+            // Update value display
+            container.select(".value-display")
+                .text(value);
+        }
+
+        function rotateArrowWithSweep(svg, arrow, value, modulus, duration, color, isSubtraction) {
+            const sweepArea = svg.select(".sweep-area");
+            
+            // Ensure the value is within the modulus range
+            const normalizedValue = ((value % modulus) + modulus) % modulus;
+            let finalAngle = normalizedValue * (360 / modulus);
+
+            // Determine the shortest path for rotation
+            if (isSubtraction) {
+                finalAngle = finalAngle - 360;
+            }
+
+            arrow.transition()
+                .duration(duration)
+                .attrTween("transform", function() {
+                    return function(t) {
+                        const ease = d3.easePolyOut.exponent(2.5);
+                        const currentAngle = ease(t) * finalAngle;
+                        
+                        endAngle = Math.abs(currentAngle) * Math.PI / 180
+                        // Update sweep area
+                        const arcGenerator = d3.arc()
+                            .innerRadius(0)
+                            .outerRadius(radius)
+                            .startAngle(0)
+                            .endAngle(isSubtraction ? -endAngle : endAngle);
+
+                        sweepArea.attr("d", arcGenerator());
+
+                        return `rotate(${currentAngle})`;
+                    };
+                });
+        }
+
+        function visualizeOperation(a, b, operation, modulus) {
+            const container = d3.select("#visualization");
+            container.selectAll("*").remove();
+
+            const svgA = createDial("dialA", "blue");
+            container.append("div").attr("class", "operation-sign").text(getOperationSign(operation));
+            const svgB = createDial("dialB", "red");
+            container.append("div").attr("class", "equivalence-sign").html("≡<span class='modulo-subscript'>" + modulus + "</span>");
+            const svgResult = createDial("dialResult", "green");
+
+            updateDial(svgA, modulus, a, "blue");
+            
+            setTimeout(() => {
+                updateDial(svgB, modulus, b, "red");
+            }, 2200);
+
+            let result;
+            let isSubtraction = false;
+            switch (operation) {
+                case "add":
+                    result = (a + b) % modulus;
+                    break;
+                case "subtract":
+                    result = ((a - b) % modulus + modulus) % modulus;
+                    isSubtraction = true;
+                    break;
+                case "multiply":
+                    result = (a * b) % modulus;
+                    break;
+                default:
+                    console.error("Invalid operation");
+                    return;
+            }
+
+            setTimeout(() => {
+                updateDial(svgResult, modulus, result, "green", isSubtraction);
+            }, 4400);
+        }
+
+        function getOperationSign(operation) {
+            switch (operation) {
+                case "add": return "+";
+                case "subtract": return "−";
+                case "multiply": return "×";
+                default: return "?";
+            }
+        }
+
+        function updateVisualization() {
+            const modulus = parseInt(document.getElementById("modulus").value);
+            const a = parseInt(document.getElementById("a").value);
+            const b = parseInt(document.getElementById("b").value);
+            const operation = document.getElementById("operation").value;
+
+            visualizeOperation(a, b, operation, modulus);
+        }
+
+        updateVisualization();
+    </script>
+</body>
+</html>
