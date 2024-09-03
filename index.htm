@@ -74,6 +74,9 @@
     </div>
     <div id="visualization"></div>
 
+    <footer>
+        <p>Interested in contributing to this tool? Check out the <a href="https://github.com/onsight-tech-services/MAVT" target="_blank">GitHub repo</a>!</p>
+    </footer>
     <script>
         const width = 200;
         const height = 200;
@@ -151,7 +154,7 @@
             const container = d3.select(svg.node().parentNode.parentNode);
             svg.selectAll(".number, .arrow").remove();
 
-            const numbers = d3.range(modulus);
+            const numbers = d3.range(1, modulus + 1);
             const numberRadius = radius - 15;
 
             svg.selectAll(".number")
